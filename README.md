@@ -59,6 +59,91 @@ The agent will inspect your file, classify columns, and write `clean_data.R`.
 
 The patterns in `references/patterns.md` are also useful standalone — copy-paste the template that matches your data problem.
 
+## Audit Log: What the Analyst Sees
+
+The skill doesn't just generate code — it surfaces **issues it can't resolve** so you can decide. After inspecting and classifying, the agent produces a log block at the top of the generated script, and inline comments throughout.
+
+### Inspection Log (console output)
+
+Raw column-by-column report from `read_excel()` + summary stats:
+
+```
+file: data.xlsx
+sheets: Sheet1
+
+--- sheet: Sheet1  dim: 342 x 18  dupes: 3  empty_r/c removed: 5/2 ---
+  age                       num  NA:0    uniq:58
+  sex                       num  NA:2    uniq:2    [ 1 | 2 ]
+  ethnicity                 chr  NA:12   uniq:5    [ Malay | Chinese | Indian | Other | ...
+  comorbidities             chr  NA:45   uniq:89   [ HPT, DM | DM | CAD, HPT | NONE | ...
+  occupation                chr  NA:0    uniq:0    [  ]
+  crp                       chr  NA:18   uniq:34   [ 2.5 | <0.1 | 12.0 | >500 | NEG | ...
+  id                        chr  NA:0    uniq:342
+```
+
+### Issues Flagged by the Agent
+
+When the agent detects ambiguous or problematic data, it logs warnings. Here's what that looks like:
+
+```r
+# ══════════════════════════════════════════════════════════════════════════════
+# CLEANING LOG — review these before running
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ⚠ sex — 2 NAs (0.6%). Decision: dropped (n=2), marked in `.removed` object
+# ℹ sex — numeric codes 1/2, no labels in source. Used: 1=Male, 2=Female
+#   VERIFY: confirm coding with data dictionary before analysis
+
+# ⚠ occupation — all values empty or missing. Column retained as `NA`; no
+#   cleaning applied. Consider removing or sourcing from another dataset.
+#
+# ⚠ crp — mixed numeric + text: "<0.1", ">500", "NEG".
+#   Parsed: numeric extracted, `.cens` flag column added.
+#   REVIEW: check that "NEG" → NA is appropriate (n=8 rows affected)
+#
+# ⚠ comorbidities — 89 unique values, 45 NAs (13.2%).
+#   Strategy: keyword flags for DM, HPT, CAD, CKD, CVA.
+#   ℹ Unmatched keywords in remaining rows (n=14):
+#     "ANAEMIA" (n=5), "DYSLIPIDAEMIA" (n=4), "ASTHMA" (n=3), "GASTRITIS" (n=2)
+#     → These were NOT mapped to flags. Add to `str_detect()` if needed.
+#
+# ℹ ethnicity — 12 NAs (3.5%). Kept as-is. "Other" category includes: Chinese,
+#   Indian, Kadazan, Iban. Consider collapsing rare groups for regression.
+
+# ══════════════════════════════════════════════════════════════════════════════
+```
+
+### Mutation Tracker
+
+Each `mutate()` block is preceded by a comment describing what changes. This lets the analyst grep for `# ⟶` to review every transformation at a glance:
+
+```r
+# ⟶ sex: num → factor (1=Male, 2=Female), 2 NAs dropped
+# ⟶ age: num, no changes
+# ⟶ comorbidities: parsed → 5 binary flags (dm, hpt, cad, ckd, cva)
+# ⟶ crp: chr → num + .cens flag (left/right/none)
+# ⟶ id: chr, preserved as-is
+```
+
+### After Running: Quick Checks
+
+The generated script ends with verification blocks so the analyst can immediately sanity-check the output:
+
+```r
+# ── Verification ──────────────────────────────────────────────────────────────
+glimpse(data)                               # structure check
+summary(data)                               # range + NA check
+
+# Column mapping audit
+cat("Columns added:", setdiff(names(data), names(raw)), "\n")
+cat("Columns dropped:", setdiff(names(raw), names(data)), "\n")
+cat("Rows in:", nrow(raw), "→ out:", nrow(data), "\n")
+```
+
+Every issue that would normally require a manual spreadsheet inspection is surfaced upfront. The agent does the pattern-matching; the human makes the call.
+
+---
+
 ## Requirements
 
 The generated scripts use these R packages (installed via `pacman`):
