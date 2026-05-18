@@ -1,0 +1,28 @@
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Data files (don't commit client data)
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.sav
+*.dta
+*.rds
+*.RDS
+
+# Generated scripts (examples OK, actual work output shouldn't be tracked)
+# clean_data.R
+
+# macOS
+.DS_Store
+Thumbs.db
+
+# R package development
+*.o
+*.so
+*.dll
